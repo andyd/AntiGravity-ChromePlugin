@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Summarizer</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <div class="container">
+    <header>
+      <div class="header-content">
+        <div>
+          <h1>AntiGravity</h1>
+          <p class="subtitle">Content Summarizer</p>
+        </div>
+        <button id="settingsBtn" class="icon-btn" aria-label="Settings">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path
+              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+            </path>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <main>
+      <!-- Settings Panel -->
+      <div id="settingsPanel" class="settings-panel hidden">
+        <label for="apiKey" class="input-label">Gemini API Key</label>
+        <div class="input-group">
+          <input type="password" id="apiKey" placeholder="Enter your API Key" class="text-input">
+        </div>
+        <p class="help-text">Get your key from <a href="https://aistudio.google.com/app/apikey" target="_blank">Google
+            AI Studio</a></p>
+        <button id="saveKeyBtn" class="secondary-btn">Save Key</button>
+      </div>
+
+      <!-- Main UI -->
+      <div id="mainContent">
+        <div class="status-container" id="statusContainer">
+          <p id="statusText">Ready to summarize</p>
+        </div>
+
+        <button id="summarizeBtn" class="primary-btn">
+          <span class="btn-text">Summarize Page</span>
+          <div class="shine"></div>
+        </button>
+
+        <div class="options">
+          <label class="toggle">
+            <input type="checkbox" id="saveFile" checked>
+            <span class="slider"></span>
+            <span class="label-text">Save to File</span>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" id="copyClipboard" checked>
+            <span class="slider"></span>
+            <span class="label-text">Copy to Clipboard</span>
+          </label>
+        </div>
+      </div>
+    </main>
+
+    <footer>
+      <div class="loader" id="loader" hidden></div>
+    </footer>
+  </div>
+  <script src="popup.js"></script>
+</body>
+
+</html>
