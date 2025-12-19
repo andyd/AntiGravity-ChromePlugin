@@ -11,11 +11,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     const apiKeyInput = document.getElementById('apiKey');
     const saveKeyBtn = document.getElementById('saveKeyBtn');
 
+    // Trial Elements
+    const trialStatus = document.getElementById('trialStatus');
+    const trialCountSpan = document.getElementById('trialCount');
+
     // State
+    const TRIAL_LIMIT = 5;
+    // TODO: Developer - Replace this with your restricted "Demo" API Key if you want to offer free trials.
+    // Ensure you restrict this key in Google Cloud Console to your Extension ID to prevent theft.
+    const DEMO_KEY = "PLACEHOLDER_DEMO_KEY";
+
     let API_KEY = "";
+    let usageCount = 0;
 
     // Initialization
-    await loadApiKey();
+    await loadSettings();
 
     // Listeners
     settingsBtn.addEventListener('click', toggleSettings);
@@ -35,15 +45,37 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    async function loadApiKey() {
-        const data = await chrome.storage.sync.get(['geminiApiKey']);
+    async function loadSettings() {
+        const data = await chrome.storage.sync.get(['geminiApiKey', 'usageCount']);
+
+        // Load Usage
+        usageCount = data.usageCount || 0;
+
+        // Load Key
         if (data.geminiApiKey) {
             API_KEY = data.geminiApiKey;
             apiKeyInput.value = API_KEY;
+            trialStatus.classList.add('hidden');
         } else {
-            // No Key Found -> Force Open Settings
-            toggleSettings();
-            setStatus("Welcome! Please enter your Gemini API Key to start.", "warning");
+            // No Key -> Show Trial Status
+            updateTrialUI();
+        }
+    }
+
+    function updateTrialUI() {
+        if (API_KEY) return; // Don't show if we have a key
+
+        trialStatus.classList.remove('hidden');
+        trialCountSpan.textContent = usageCount;
+
+        if (usageCount >= TRIAL_LIMIT) {
+            setStatus("Free trial ended. Please add an API Key.", "warning");
+            summarizeBtn.textContent = "Trial Ended";
+            // Optional: disable button? 
+            // summarizeBtn.disabled = true; 
+        } else {
+            const remaining = TRIAL_LIMIT - usageCount;
+            setStatus(`Free Mode (${remaining} tries left)`, "normal");
         }
     }
 
@@ -53,6 +85,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         await chrome.storage.sync.set({ geminiApiKey: key });
         API_KEY = key;
+
+        // Hide trial UI
+        trialStatus.classList.add('hidden');
 
         // UI Feedback
         const originalText = saveKeyBtn.textContent;
@@ -68,10 +103,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     async function handleSummarize() {
-        if (!API_KEY) {
-            setStatus("Missing API Key. Please enter it in Settings.", "error");
-            toggleSettings(); // Force open settings
-            return;
+        // DECIDE WHICH KEY TO USE
+        let finalKey = API_KEY;
+
+        if (!finalKey) {
+            // Trying to use Free Trial
+            if (usageCount >= TRIAL_LIMIT) {
+                setStatus("Trial limit reached. Please add your key in Settings.", "error");
+                toggleSettings();
+                return;
+            }
+
+            if (DEMO_KEY === "PLACEHOLDER_DEMO_KEY") {
+                setStatus("Dev Warning: No DEMO_KEY configured in code.", "error");
+                return;
+            }
+
+            finalKey = DEMO_KEY;
         }
 
         setLoading(true);
@@ -101,9 +149,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             setStatus("Asking Gemini...", "normal");
 
             // 4. Call Gemini API
-            const summary = await callGeminiAPI(response.content);
+            const summary = await callGeminiAPI(response.content, finalKey);
 
-            // 5. Handle Options
+            // 5. Increment Usage if using Demo Key
+            if (!API_KEY) {
+                usageCount++;
+                await chrome.storage.sync.set({ usageCount: usageCount });
+                updateTrialUI();
+            }
+
+            // 6. Handle Options
             const shouldSave = document.getElementById('saveFile').checked;
             const shouldCopy = document.getElementById('copyClipboard').checked;
 
@@ -115,7 +170,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 await navigator.clipboard.writeText(summary);
             }
 
-            // 6. Open Window
+            // 7. Open Window
             openSummaryWindow(response.title, response.url, response.content, summary);
 
             setLoading(false);
@@ -133,10 +188,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Cache valid model if found
     let validModelName = null;
 
-    async function checkModels() {
-        if (!API_KEY) return null;
+    async function checkModels(apiKeyOverride) {
+        const keyToUse = apiKeyOverride || API_KEY;
+        if (!keyToUse) {
+            alert("No API Key available.");
+            return null;
+        }
 
-        const listEndpoint = `https://generativelanguage.googleapis.com/v1beta/models?key=${API_KEY}`;
+        const listEndpoint = `https://generativelanguage.googleapis.com/v1beta/models?key=${keyToUse}`;
         try {
             const response = await fetch(listEndpoint);
             const data = await response.json();
@@ -163,7 +222,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    async function callGeminiAPI(text) {
+    async function callGeminiAPI(text, apiKeyOverride) {
+        const keyToUse = apiKeyOverride || API_KEY;
+
         // Models to try in order of preference
         let modelsToTry = [
             'gemini-1.5-flash',
@@ -181,11 +242,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         // 1. Try preferred models
         for (const model of modelsToTry) {
             try {
-                return await tryGenerateContent(model, text);
+                return await tryGenerateContent(model, text, keyToUse);
             } catch (e) {
                 console.log(`Model ${model} failed, trying next...`, e.message);
                 lastError = e;
                 if (!e.message.includes("not found") && !e.message.includes("not supported")) {
+                    // If it's a profound error (like Auth), don't keep guessing models
                     throw e;
                 }
             }
@@ -193,14 +255,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // 2. If all failed, dynamically fetch available models for this key
         setStatus("Finding compatible model...", "warning");
-        const availableModels = await checkModels();
+        const availableModels = await checkModels(keyToUse);
 
         if (availableModels && availableModels.length > 0) {
             console.log("Found available models:", availableModels);
             // Try the first one we find
             const fallbackModel = availableModels[0];
             try {
-                const result = await tryGenerateContent(fallbackModel, text);
+                const result = await tryGenerateContent(fallbackModel, text, keyToUse);
+                // It worked! Remember this model.
                 validModelName = fallbackModel;
                 return result;
             } catch (e) {
@@ -211,8 +274,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         throw new Error(`Could not find any working Gemini model. Last error: ${lastError?.message || "Unknown"}`);
     }
 
-    async function tryGenerateContent(modelName, text) {
-        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${API_KEY}`;
+    async function tryGenerateContent(modelName, text, keyToUse) {
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${keyToUse}`;
 
         const maxLength = 100000;
         const truncatedText = text.slice(0, maxLength);
@@ -258,6 +321,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --- Helpers ---
 
     function saveToFile(url, originalContent, summary) {
+        // Add date
         const dateStr = new Date().toLocaleString();
         const fileContent = `ANTI-GRAVITY SUMMARY\nGenerated: ${dateStr}\n` +
             `Source: ${url}\n\n` +
@@ -277,6 +341,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function openSummaryWindow(title, url, originalContent, summary) {
+        // Convert markdown (basic) to HTML for display
         let html = summary
             .replace(/^### (.*$)/gim, '<h3>$1</h3>')
             .replace(/^## (.*$)/gim, '<h2>$1</h2>')
@@ -286,6 +351,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             .replace(/\n\n/gim, '<p></p>')
             .replace(/\n/gim, '<br>');
 
+        // Basic safety escape for original content
         const safeOriginal = (originalContent || "").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
         const htmlContent = `

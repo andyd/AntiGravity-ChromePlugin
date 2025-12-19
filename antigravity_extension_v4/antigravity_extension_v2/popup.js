@@ -41,9 +41,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             API_KEY = data.geminiApiKey;
             apiKeyInput.value = API_KEY;
         } else {
-            // No Key Found -> Force Open Settings
-            toggleSettings();
-            setStatus("Welcome! Please enter your Gemini API Key to start.", "warning");
+            // If no key, maybe open settings automatically? 
+            // Let's just set a status message
+            setStatus("Please set your Gemini API Key in settings.", "warning");
         }
     }
 
@@ -69,7 +69,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     async function handleSummarize() {
         if (!API_KEY) {
-            setStatus("Missing API Key. Please enter it in Settings.", "error");
+            setStatus("Missing API Key. Click 'Settings' to add it.", "error");
             toggleSettings(); // Force open settings
             return;
         }
@@ -116,7 +116,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             // 6. Open Window
-            openSummaryWindow(response.title, response.url, response.content, summary);
+            openSummaryWindow(response.title, summary);
 
             setLoading(false);
             showSuccess("Done! Summary ready.");
@@ -134,7 +134,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     let validModelName = null;
 
     async function checkModels() {
-        if (!API_KEY) return null;
+        if (!API_KEY) {
+            alert("Please enter an API Key first.");
+            return null;
+        }
 
         const listEndpoint = `https://generativelanguage.googleapis.com/v1beta/models?key=${API_KEY}`;
         try {
@@ -186,6 +189,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 console.log(`Model ${model} failed, trying next...`, e.message);
                 lastError = e;
                 if (!e.message.includes("not found") && !e.message.includes("not supported")) {
+                    // If it's a profound error (like Auth), don't keep guessing models
                     throw e;
                 }
             }
@@ -201,6 +205,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const fallbackModel = availableModels[0];
             try {
                 const result = await tryGenerateContent(fallbackModel, text);
+                // It worked! Remember this model.
                 validModelName = fallbackModel;
                 return result;
             } catch (e) {
@@ -220,16 +225,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const payload = {
             contents: [{
                 parts: [{
-                    text: `Please provide a **highly detailed and verbose summary** of the following web page content. 
-                    
-                    Structure:
-                    1. **Executive Summary**: A high-level overview.
-                    2. **Key Points**: Detailed bullet points of the main arguments/facts.
-                    3. **Analysis/Details**: deep dive into the specific content.
-                    
-                    Format the output with Markdown.
-                    
-                    Content: \n\n${truncatedText}`
+                    text: `Please provide a concise and comprehensive summary of the following web page content. Capture the main ideas, key arguments, and any important data points. Format the output with Markdown: \n\n${truncatedText}`
                 }]
             }]
         };
@@ -258,6 +254,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --- Helpers ---
 
     function saveToFile(url, originalContent, summary) {
+        // Add date
         const dateStr = new Date().toLocaleString();
         const fileContent = `ANTI-GRAVITY SUMMARY\nGenerated: ${dateStr}\n` +
             `Source: ${url}\n\n` +
@@ -276,7 +273,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         reader.readAsDataURL(blob);
     }
 
-    function openSummaryWindow(title, url, originalContent, summary) {
+    function openSummaryWindow(title, summary) {
+        // Convert markdown (basic) to HTML for display
+        // A simple regex replacer for basic markdown 
         let html = summary
             .replace(/^### (.*$)/gim, '<h3>$1</h3>')
             .replace(/^## (.*$)/gim, '<h2>$1</h2>')
@@ -286,8 +285,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             .replace(/\n\n/gim, '<p></p>')
             .replace(/\n/gim, '<br>');
 
-        const safeOriginal = (originalContent || "").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-
         const htmlContent = `
       <!DOCTYPE html>
       <html>
@@ -296,92 +293,37 @@ document.addEventListener('DOMContentLoaded', async () => {
         <style>
           body { 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
-            max-width: 900px; 
-            margin: 0 auto; 
+            max-width: 800px; 
+            margin: 40px auto; 
             padding: 40px; 
             line-height: 1.6; 
+            background: #f9fafb; 
             color: #1f2937; 
-            background-color: #f3f4f6;
-          }
-          .container {
-            background: white;
-            padding: 40px;
-            border-radius: 12px;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); 
+            border-radius: 8px;
+            background-color: white;
           }
-          h1 { border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; color: #111827; margin-top: 0; }
-          h2 { color: #374151; margin-top: 30px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
-          h3 { color: #4b5563; margin-top: 20px; }
+          h1 { border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; color: #111827; }
+          h2 { color: #374151; margin-top: 30px; }
           p { margin-bottom: 1em; }
-          
-          .meta-box {
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 30px;
-            font-size: 0.9em;
-          }
-          .meta-row { display: flex; gap: 10px; margin-bottom: 5px; }
-          .meta-label { font-weight: 600; color: #64748b; min-width: 80px; }
-          .meta-value { color: #334155; word-break: break-all; }
-          .meta-value a { color: #2563eb; text-decoration: none; }
-          .meta-value a:hover { text-decoration: underline; }
-
-          .full-content-section {
-            margin-top: 60px;
-            border-top: 4px solid #e5e7eb;
-            padding-top: 30px;
-          }
-          .full-content-box {
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            padding: 20px;
-            border-radius: 8px;
-            font-family: monospace;
-            white-space: pre-wrap;
-            font-size: 0.85em;
-            max-height: 600px;
-            overflow-y: auto;
-            color: #475569;
-          }
-          
+          .meta { font-size: 0.85em; color: #6b7280; margin-bottom: 30px; }
           .footer { margin-top: 50px; padding-top: 20px; border-top: 1px solid #e5e7eb; font-size: 0.8em; color: #9ca3af; text-align: center; }
         </style>
       </head>
       <body>
-        <div class="container">
-          <h1>Summary: ${title}</h1>
-          
-          <div class="meta-box">
-             <div class="meta-row">
-               <div class="meta-label">Source URL:</div>
-               <div class="meta-value"><a href="${url}" target="_blank">${url}</a></div>
-             </div>
-             <div class="meta-row">
-               <div class="meta-label">Date:</div>
-               <div class="meta-value">${new Date().toLocaleString()}</div>
-             </div>
-          </div>
-
-          <div class="content">
-            ${html}
-          </div>
-
-          <div class="full-content-section">
-            <h2>Original Page Content</h2>
-            <div class="full-content-box">${safeOriginal}</div>
-          </div>
-
-          <div class="footer">Powered by Gemini 1.5 Flash • AntiGravity Summarizer</div>
+        <h1>Summary: ${title}</h1>
+        <div class="meta">Generated by AntiGravity Summarizer</div>
+        <div class="content">
+          ${html}
         </div>
+        <div class="footer">Powered by Gemini 1.5 Flash</div>
       </body>
       </html>
     `;
 
         const blob = new Blob([htmlContent], { type: 'text/html' });
-        const urlObj = URL.createObjectURL(blob);
-        window.open(urlObj, '_blank');
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
     }
 
     function setLoading(isLoading) {

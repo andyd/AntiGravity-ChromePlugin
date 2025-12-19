@@ -41,9 +41,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             API_KEY = data.geminiApiKey;
             apiKeyInput.value = API_KEY;
         } else {
-            // No Key Found -> Force Open Settings
-            toggleSettings();
-            setStatus("Welcome! Please enter your Gemini API Key to start.", "warning");
+            // If no key, maybe open settings automatically? 
+            // Let's just set a status message
+            setStatus("Please set your Gemini API Key in settings.", "warning");
         }
     }
 
@@ -69,7 +69,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     async function handleSummarize() {
         if (!API_KEY) {
-            setStatus("Missing API Key. Please enter it in Settings.", "error");
+            setStatus("Missing API Key. Click 'Settings' to add it.", "error");
             toggleSettings(); // Force open settings
             return;
         }
@@ -134,7 +134,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     let validModelName = null;
 
     async function checkModels() {
-        if (!API_KEY) return null;
+        if (!API_KEY) {
+            alert("Please enter an API Key first.");
+            return null;
+        }
 
         const listEndpoint = `https://generativelanguage.googleapis.com/v1beta/models?key=${API_KEY}`;
         try {
@@ -186,6 +189,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 console.log(`Model ${model} failed, trying next...`, e.message);
                 lastError = e;
                 if (!e.message.includes("not found") && !e.message.includes("not supported")) {
+                    // If it's a profound error (like Auth), don't keep guessing models
                     throw e;
                 }
             }
@@ -201,6 +205,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const fallbackModel = availableModels[0];
             try {
                 const result = await tryGenerateContent(fallbackModel, text);
+                // It worked! Remember this model.
                 validModelName = fallbackModel;
                 return result;
             } catch (e) {
@@ -258,6 +263,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --- Helpers ---
 
     function saveToFile(url, originalContent, summary) {
+        // Add date
         const dateStr = new Date().toLocaleString();
         const fileContent = `ANTI-GRAVITY SUMMARY\nGenerated: ${dateStr}\n` +
             `Source: ${url}\n\n` +
@@ -277,6 +283,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function openSummaryWindow(title, url, originalContent, summary) {
+        // Convert markdown (basic) to HTML for display
         let html = summary
             .replace(/^### (.*$)/gim, '<h3>$1</h3>')
             .replace(/^## (.*$)/gim, '<h2>$1</h2>')
@@ -286,6 +293,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             .replace(/\n\n/gim, '<p></p>')
             .replace(/\n/gim, '<br>');
 
+        // Basic safety escape for original content
         const safeOriginal = (originalContent || "").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
         const htmlContent = `

@@ -1,0 +1,23 @@
+{
+    "manifest_version": 3,
+    "name": "AntiGravity Summarizer",
+    "description": "Summarize current page, save content, and copy to clipboard.",
+    "version": "1.0",
+    "permissions": [
+        "activeTab",
+        "scripting",
+        "downloads",
+        "clipboardWrite",
+        "storage"
+    ],
+    "host_permissions": [
+        "https://generativelanguage.googleapis.com/*"
+    ],
+    "action": {
+        "default_popup": "popup.html",
+        "default_title": "Summarize Page"
+    },
+    "background": {
+        "service_worker": "background.js"
+    }
+}
